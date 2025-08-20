@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+
+# Virtual environments
+*venv/
+venv/
+*derpin/
+derpin/
+env/
+.env
+.venv/
+
+# Data files
+TCI_2.tif
+TCI.tif
+# Models
+models/DelineateAnything.pt
