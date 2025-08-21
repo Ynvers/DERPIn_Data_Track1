@@ -13,6 +13,7 @@ env/
 # Data files
 TCI_2.tif
 TCI.tif
+*tif
 # Models
 DelineateAnything.pt
 models/DelineateAnything.pt
