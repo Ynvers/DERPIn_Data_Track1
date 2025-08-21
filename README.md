@@ -33,6 +33,43 @@ This model helps in:
 
 The model can be used directly with satellite RGB imagery to automatically detect and vectorize agricultural field boundaries.
 
+## Installation and Prerequisites
+
+### System Requirements
+- **Python**: 3.8 or higher
+- **GPU**: NVIDIA GPU recommended (CUDA support) for faster processing
+- **RAM**: 8GB minimum, 16GB recommended for large images
+- **Storage**: 2GB free space for models and outputs
+
+### Installation Steps
+
+1. **Clone the Repository**
+```bash
+git clone https://github.com/Ynvers/DERPIn_Data_Track1.git
+cd DERPIn_Data_Track1
+```
+
+2. **Create Virtual Environment**
+```bash
+# Create virtual environment
+python -m venv derpin
+
+# Activate environment
+.\derpin\Scripts\activate  # Windows
+# or
+source derpin/bin/activate  # Linux/Mac
+```
+
+3. **Install Dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+4. **Additional Dashboard Dependencies** (if using interactive dashboard)
+```bash
+pip install streamlit-cropper
+```
+
 ## Sample Data
 
 ### Sentinel-2 TCI Images
@@ -82,3 +119,69 @@ wget "https://zenodo.org/api/records/14920706/files/AFCD_2022.tif/content" -O AF
 
 #### Processing these images
 Once downloaded, these TCI files can be processed with the Delineate-Anything model to detect agricultural field boundaries.
+
+## Interactive Dashboard
+
+This project includes an interactive Streamlit dashboard for easy field delineation from satellite imagery.
+
+### Quick Start
+
+1. **Environment Setup**
+```bash
+# Create environment
+python -m venv venv
+# Activate the virtual environment
+.\venv\Scripts\activate  # Windows
+# or
+source venv/bin/activate  # Linux/Mac
+
+# Install required packages
+pip install -r requirements.txt
+```
+
+2. **Launch the Dashboard**
+```bash
+# Run the main dashboard
+streamlit run dashboard.py
+
+# Alternative: Run the cropping version (with interactive region selection)
+cd Dashboard
+streamlit run main.py
+```
+
+3. **Dashboard Features**
+   - 🔄 **File Upload**: Support for GeoTIFF files up to 500MB
+   - 🎯 **Region Selection**: Interactive region of interest selection using sliders
+   - 🖼️ **Image Preview**: Real-time satellite image visualization
+   - 🧠 **AI Processing**: Automatic field detection using DelineateAnything model
+   - 📄 **Results Export**: Download detected field boundaries as GeoJSON
+
+### Dashboard Workflow
+
+1. **Upload Image**: Choose a GeoTIFF satellite image (Sentinel-2 TCI or AFCD)
+2. **Select Region**: Use percentage sliders to define your area of interest
+3. **Preview Selection**: View the selected region before processing
+4. **Run Detection**: Click "Detect Fields" to start AI analysis
+5. **Download Results**: Get GeoJSON file with detected field boundaries
+
+### Dashboard Versions
+
+**Main Dashboard (`dashboard.py`)**
+- Slider-based region selection
+- Streamlined interface
+- Output folder organization
+- Best for batch processing
+
+**Interactive Dashboard (`Dashboard/main.py`)**
+- Visual cropping tool using `streamlit-cropper`
+- Click-and-drag region selection
+- Real-time crop preview
+- Best for precise region selection
+
+### Configuration
+
+The dashboard can be customized via `.streamlit/config.toml`:
+```toml
+[server]
+maxUploadSize = 500  # Maximum file size in MB
+```

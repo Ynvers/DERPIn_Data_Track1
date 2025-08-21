@@ -108,7 +108,7 @@ def main():
     if 'delineator' not in st.session_state:
         with st.spinner("Loading DelineateAnything model..."):
             try:
-                delineator = FieldDelineator(model_path="DelineateAnything.pt")
+                delineator = FieldDelineator(model_path="../DelineateAnything.pt")
                 if delineator.model is not None:
                     st.session_state.delineator = delineator
                     st.success("🎉 Model loaded successfully!")

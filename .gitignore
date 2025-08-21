@@ -23,3 +23,6 @@ temp_temp_TCI.tif
 temp_TCI_2.tif
 output/
 *output/
+Dashboard/fields.geojson
+Dashboard/output_fields.geojson
+Dashboard/overlay.png
