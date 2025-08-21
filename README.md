@@ -119,12 +119,10 @@ This project includes an interactive Streamlit dashboard for easy field delineat
 
 1. **Environment Setup**
 ```bash
-# Create environment
-python -m venv venv
 # Activate the virtual environment
-.\venv\Scripts\activate  # Windows
+.\derpin\Scripts\activate  # Windows
 # or
-source venv/bin/activate  # Linux/Mac
+source derpin/bin/activate  # Linux/Mac
 
 # Install required packages
 pip install -r requirements.txt
@@ -133,9 +131,6 @@ pip install -r requirements.txt
 2. **Launch the Dashboard**
 ```bash
 # Run the main dashboard
-streamlit run dashboard.py
-
-# Alternative: Run the cropping version (with interactive region selection)
 cd Dashboard
 streamlit run main.py
 ```
@@ -156,12 +151,6 @@ streamlit run main.py
 5. **Download Results**: Get GeoJSON file with detected field boundaries
 
 ### Dashboard Versions
-
-**Main Dashboard (`dashboard.py`)**
-- Slider-based region selection
-- Streamlined interface
-- Output folder organization
-- Best for batch processing
 
 **Interactive Dashboard (`Dashboard/main.py`)**
 - Visual cropping tool using `streamlit-cropper`
