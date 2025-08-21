@@ -107,15 +107,6 @@ wget "https://zenodo.org/api/records/14920706/files/AFCD_2022.tif/content" -O AF
 - **Data Type**: 8-bit unsigned integer
 - **Size**: ~50-1000 MB per image
 
-**African Cropland Dataset (AFCD):**
-- **Format**: GeoTIFF (AFCD_YYYY.tif, where YYYY is the year)
-- **Resolution**: 30m per pixel
-- **Bands**: Single band cropland mask
-- **Data Values**: 
-  - `1` = Cultivated area
-  - `0` = Non-cultivated area
-- **Coverage**: Annual cropland mapping product covering Africa
-- **Source**: [Zenodo Record](https://zenodo.org/api/records/14920706)
 
 #### Processing these images
 Once downloaded, these TCI files can be processed with the Delineate-Anything model to detect agricultural field boundaries.
