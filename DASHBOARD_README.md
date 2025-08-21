@@ -26,6 +26,8 @@ venv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
+3. Suivre les instructions pour télécharger le modèle avec wget sinon le chargement direct par YOLO ne marchera pas
+
 ## Utilisation
 
 ### Mode Dashboard Streamlit

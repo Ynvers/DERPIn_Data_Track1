@@ -113,6 +113,12 @@ class FieldDelineator:
             # Normaliser avec le même étirement pour toute la région
             overlay = to_uint8_global(region_img)
             
+            # S'assurer que l'overlay est dans le bon format pour OpenCV
+            overlay = np.ascontiguousarray(overlay, dtype=np.uint8)
+            
+            # Vérifier le format de l'overlay
+            print(f"📊 Format overlay: {overlay.shape}, dtype: {overlay.dtype}, contiguous: {overlay.flags.c_contiguous}")
+            
             # Traiter par tuiles avec chevauchement
             stride = tile_size - overlap
             print(f"🚀 Lancement de la détection (tuile par tuile)")
@@ -189,8 +195,27 @@ class FieldDelineator:
             rel_x, rel_y = x_min - x_min, y_min - y_min  # Relatif à la région extraite
             
         # Sauvegarder l'overlay
-        overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(overlay_path, overlay_rgb)
+        try:
+            # S'assurer que l'overlay est dans le bon format
+            if len(overlay.shape) == 3 and overlay.shape[2] == 3:  # Image RGB
+                overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+            else:
+                overlay_bgr = overlay
+                
+            # S'assurer que c'est contiguous pour l'écriture
+            overlay_bgr = np.ascontiguousarray(overlay_bgr, dtype=np.uint8)
+            
+            success = cv2.imwrite(overlay_path, overlay_bgr)
+            if not success:
+                print(f"⚠️ Erreur lors de la sauvegarde de {overlay_path}")
+            else:
+                print(f"✅ Overlay sauvegardé: {overlay_path}")
+        except Exception as e:
+            print(f"❌ Erreur lors de la sauvegarde de l'overlay: {e}")
+            # Sauvegarder avec une méthode alternative
+            from PIL import Image
+            overlay_pil = Image.fromarray(overlay)
+            overlay_pil.save(overlay_path)
         
         # Sauvegarder le GeoJSON
         geojson = {
@@ -238,7 +263,30 @@ class FieldDelineator:
         poly_overlay[:, 1] -= region_y
         
         # Dessiner sur l'overlay
-        cv2.polylines(overlay, [poly_overlay.astype(np.int32)], True, (255,255,255), 2)
+        # S'assurer que l'overlay est dans le bon format pour OpenCV
+        if not overlay.flags.c_contiguous:
+            overlay = np.ascontiguousarray(overlay)
+        
+        # S'assurer que les coordonnées sont valides
+        poly_overlay_clipped = poly_overlay.copy()
+        poly_overlay_clipped[:, 0] = np.clip(poly_overlay_clipped[:, 0], 0, overlay.shape[1] - 1)
+        poly_overlay_clipped[:, 1] = np.clip(poly_overlay_clipped[:, 1], 0, overlay.shape[0] - 1)
+        
+        # Dessiner le polygone
+        try:
+            pts = poly_overlay_clipped.astype(np.int32).reshape((-1, 1, 2))
+            cv2.polylines(overlay, [pts], True, (255, 255, 255), 2)
+        except Exception as e:
+            print(f"⚠️ Erreur lors du dessin du polygone: {e}")
+            # Essayer une approche alternative si le dessin échoue
+            try:
+                pts_list = poly_overlay_clipped.astype(np.int32).tolist()
+                for i in range(len(pts_list)):
+                    start = tuple(pts_list[i])
+                    end = tuple(pts_list[(i + 1) % len(pts_list)])
+                    cv2.line(overlay, start, end, (255, 255, 255), 2)
+            except Exception as e2:
+                print(f"⚠️ Erreur alternative lors du dessin: {e2}")
         
         # Convertir en coordonnées géographiques et ajouter au GeoJSON
         pts_geo = []

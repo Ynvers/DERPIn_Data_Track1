@@ -14,4 +14,11 @@ env/
 TCI_2.tif
 TCI.tif
 # Models
+DelineateAnything.pt
 models/DelineateAnything.pt
+
+temp_temp_TCI_2.tif
+temp_temp_TCI.tif
+temp_TCI_2.tif
+output/
+*output/

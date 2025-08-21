@@ -53,14 +53,32 @@ wget "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/36/Q
 wget "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/54/T/WN/2023/8/S2A_54TWN_20230815_0_L2A/TCI.tif" -O TCI_Asia_20230815.tif
 ```
 
+**Example 3: African Cropland Dataset (AFCD) - 2022**
+```bash
+# Download Annual Cropland Mapping for Africa (30m resolution)
+wget "https://zenodo.org/api/records/14920706/files/AFCD_2022.tif/content" -O AFCD_2022.tif
+```
+
 
 #### Image Specifications
+
+**Sentinel-2 TCI Images:**
 - **Format**: Cloud Optimized GeoTIFF (COG)
 - **Bands**: RGB (Red, Green, Blue)
 - **Resolution**: 10m per pixel
 - **Projection**: UTM (varies by location)
 - **Data Type**: 8-bit unsigned integer
-- **Size**: ~50-100 MB per image
+- **Size**: ~50-1000 MB per image
+
+**African Cropland Dataset (AFCD):**
+- **Format**: GeoTIFF (AFCD_YYYY.tif, where YYYY is the year)
+- **Resolution**: 30m per pixel
+- **Bands**: Single band cropland mask
+- **Data Values**: 
+  - `1` = Cultivated area
+  - `0` = Non-cultivated area
+- **Coverage**: Annual cropland mapping product covering Africa
+- **Source**: [Zenodo Record](https://zenodo.org/api/records/14920706)
 
 #### Processing these images
 Once downloaded, these TCI files can be processed with the Delineate-Anything model to detect agricultural field boundaries.

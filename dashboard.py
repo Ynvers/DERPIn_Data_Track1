@@ -1,9 +1,9 @@
 """
-Composants pour le dashboard de délimitation de champs.
+Components for the agricultural field delineation dashboard.
 
-Ce module contient des utilitaires pour créer un dashboard interactif
-permettant aux utilisateurs de sélectionner des zones d'intérêt sur des images
-satellite et de détecter les délimitations de champs.
+This module contains utilities to create an interactive dashboard
+allowing users to select regions of interest on satellite images
+and detect field boundaries.
 """
 
 import os
@@ -15,35 +15,41 @@ from pathlib import Path
 import json
 
 # Import des modules locaux (commenter si pas encore créés)
+import rasterio
 from image_utils import load_geotiff, calculate_global_stretch, normalize_to_uint8, get_tile_from_image, convert_to_bgr
 from field_detection import FieldDelineator, download_model
 
 
 class DashboardManager:
     """
-    Gestionnaire de dashboard pour la délimitation de champs.
-    Cette classe fournit les fonctions nécessaires pour créer un dashboard
-    interactif avec Streamlit, Dash ou toute autre bibliothèque de dashboard.
+    Dashboard manager for field delineation.
+    This class provides the necessary functions to create an interactive dashboard
+    with Streamlit, Dash or any other dashboard library.
     """
     
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, output_dir="output"):
         """
-        Initialise le gestionnaire de dashboard.
+        Initialize the dashboard manager.
         
         Args:
-            model_path (str): Chemin vers le modèle DelineateAnything 
-                             (téléchargé automatiquement si None)
+            model_path (str): Path to the DelineateAnything model 
+                             (automatically downloaded if None)
+            output_dir (str): Directory for output files and temporary uploads
         """
-        # Télécharger ou localiser le modèle
+        # Create output directory if it doesn't exist
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+        
+        # Download or locate the model
         if model_path is None:
             self.model_path = download_model()
         else:
             self.model_path = model_path
             
-        # Initialiser le détecteur
+        # Initialize the detector
         self.delineator = FieldDelineator(self.model_path)
         
-        # État interne
+        # Internal state
         self.current_image_path = None
         self.metadata = None
         self.src = None
@@ -52,319 +58,378 @@ class DashboardManager:
     
     def load_image(self, image_path):
         """
-        Charge une image satellite dans le dashboard.
+        Load a satellite image into the dashboard.
         
         Args:
-            image_path (str): Chemin vers le fichier GeoTIFF
+            image_path (str): Path to the GeoTIFF file
             
         Returns:
-            dict: Métadonnées de l'image
+            dict: Image metadata
         """
         try:
             self.current_image_path = image_path
             self.metadata, self.src = load_geotiff(image_path)
             
-            # Calculer les paramètres d'étirement global
+            # Calculate global stretch parameters
             bands = [1, 2, 3] if self.src.count == 3 else [4, 3, 2]
             lo, hi = calculate_global_stretch(self.src, bands)
             self.stretch_params = (lo, hi)
             
-            print(f"✅ Image chargée: {Path(image_path).name}")
+            print(f"✅ Image loaded: {Path(image_path).name}")
             print(f"   Dimensions: {self.metadata['width']}x{self.metadata['height']}")
             
             return self.metadata
             
         except Exception as e:
-            print(f"❌ Erreur de chargement: {e}")
+            print(f"❌ Loading error: {e}")
             return None
     
     def get_overview_image(self, max_size=1000):
         """
-        Génère une image d'aperçu à afficher dans le dashboard.
+        Generate a preview image to display in the dashboard.
         
         Args:
-            max_size (int): Taille maximale de l'aperçu (pour contrôler la performance)
+            max_size (int): Maximum preview size (to control performance)
             
         Returns:
-            numpy.ndarray: Image d'aperçu RGB
+            numpy.ndarray: RGB preview image
         """
         if self.src is None:
-            print("❌ Aucune image chargée!")
+            print("❌ No image loaded!")
             return None
             
         bands = [1, 2, 3] if self.src.count == 3 else [4, 3, 2]
         
-        # Calculer la résolution d'aperçu pour respecter max_size
+        # Calculate preview resolution to respect max_size
         scale = max(self.src.width / max_size, self.src.height / max_size, 1)
         out_shape = (len(bands), int(self.src.height / scale), int(self.src.width / scale))
         
-        # Lire l'image à résolution réduite
-        overview = self.src.read(bands, out_shape=out_shape)
-        overview = overview.transpose(1, 2, 0)  # (H, W, C)
-        
-        # Appliquer l'étirement calculé précédemment
-        lo, hi = self.stretch_params
-        overview = normalize_to_uint8(overview, lo, hi)
-        
+        try:
+            # Read image at reduced resolution
+            overview = self.src.read(bands, out_shape=out_shape)
+            overview = overview.transpose(1, 2, 0)  # (H, W, C)
+            
+            # Apply previously calculated stretch
+            lo, hi = self.stretch_params
+            overview = normalize_to_uint8(overview, lo, hi)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"❌ Error reading preview: {e}")
+            # Create an empty image in case of error
+            overview = np.zeros((500, 500, 3), dtype=np.uint8)
+            
         return overview
     
     def set_region_selection(self, x, y, width, height):
         """
-        Définit la région sélectionnée par l'utilisateur.
+        Define the region selected by the user.
         
         Args:
-            x, y (int): Coordonnées du coin supérieur gauche
-            width, height (int): Dimensions de la région
+            x, y (int): Upper left corner coordinates
+            width, height (int): Region dimensions
             
         Returns:
-            tuple: La région sélectionnée (x, y, width, height)
+            tuple: The selected region (x, y, width, height)
         """
         if self.src is None:
-            print("❌ Aucune image chargée!")
+            print("❌ No image loaded!")
             return None
             
-        # Valider et ajuster les coordonnées si nécessaire
+        # Validate and adjust coordinates if necessary
         x = max(0, min(x, self.src.width - 1))
         y = max(0, min(y, self.src.height - 1))
         width = min(width, self.src.width - x)
         height = min(height, self.src.height - y)
         
         self.region_selection = (x, y, width, height)
-        print(f"✅ Région sélectionnée: ({x}, {y}, {width}, {height})")
+        print(f"✅ Region selected: ({x}, {y}, {width}, {height})")
         
         return self.region_selection
     
     def get_selected_region_preview(self):
         """
-        Renvoie un aperçu de la région sélectionnée.
+        Return a preview of the selected region.
         
         Returns:
-            numpy.ndarray: Aperçu de la région sélectionnée
+            numpy.ndarray: Preview of the selected region
         """
+        import rasterio.windows
+        
         if self.src is None or self.region_selection is None:
             return None
             
         x, y, width, height = self.region_selection
         bands = [1, 2, 3] if self.src.count == 3 else [4, 3, 2]
         
-        # Limiter la taille si nécessaire (pour performance)
+        # Limit size if necessary (for performance)
         max_preview_size = 1024
         scale = max(width / max_preview_size, height / max_preview_size, 1)
         
-        if scale > 1:
-            out_shape = (len(bands), int(height / scale), int(width / scale))
-            preview = self.src.read(
-                bands,
-                window=rasterio.windows.Window(x, y, width, height),
-                out_shape=out_shape
-            )
-        else:
-            preview = self.src.read(
-                bands,
-                window=rasterio.windows.Window(x, y, width, height)
-            )
+        try:
+            # Create a rasterio window
+            window = rasterio.windows.Window(x, y, width, height)
             
-        preview = preview.transpose(1, 2, 0)
-        preview = normalize_to_uint8(preview, *self.stretch_params)
-        
-        return preview
+            if scale > 1:
+                out_shape = (len(bands), int(height / scale), int(width / scale))
+                preview = self.src.read(
+                    bands,
+                    window=window,
+                    out_shape=out_shape
+                )
+            else:
+                preview = self.src.read(
+                    bands,
+                    window=window
+                )
+                
+            preview = preview.transpose(1, 2, 0)
+            preview = normalize_to_uint8(preview, *self.stretch_params)
+            
+            return preview
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"❌ Error reading selected region: {e}")
+            return None
     
     def process_selected_region(self, output_prefix="output", tile_size=1024, overlap=128):
         """
-        Traite la région sélectionnée avec le modèle DelineateAnything.
+        Process the selected region with the DelineateAnything model.
         
         Args:
-            output_prefix (str): Préfixe pour les fichiers de sortie
-            tile_size (int): Taille des tuiles
-            overlap (int): Chevauchement entre tuiles
+            output_prefix (str): Prefix for output files (will be placed in output_dir)
+            tile_size (int): Tile size
+            overlap (int): Overlap between tiles
             
         Returns:
-            dict: Chemins des fichiers générés
+            dict: Paths to generated files
         """
         if self.src is None or self.region_selection is None:
-            print("❌ Aucune image ou région sélectionnée!")
+            print("❌ No image or region selected!")
             return None
         
-        # Fermer la source rasterio avant de la réutiliser
+        # Create full output path in the output directory
+        full_output_prefix = os.path.join(self.output_dir, output_prefix)
+        
+        # Close rasterio source before reusing it
         if hasattr(self, 'src') and self.src is not None:
             self.src.close()
             
         result = self.delineator.process_region(
             self.current_image_path,
             region=self.region_selection,
-            output_prefix=output_prefix,
+            output_prefix=full_output_prefix,
             tile_size=tile_size,
             overlap=overlap
         )
         
-        # Réouvrir la source après traitement
+        # Reopen source after processing
         self.metadata, self.src = load_geotiff(self.current_image_path)
         
         return result
     
-    def process_image(self, image_data, output_prefix="output", tile_size=1024, overlap=128):
-        """
-        Traite une image chargée en mémoire (pour dashboards web sans accès fichier).
-        Cette fonction est utile pour les applications web où les images sont téléchargées.
-        
-        Args:
-            image_data (bytes): Données de l'image en bytes
-            output_prefix (str): Préfixe pour les fichiers de sortie
-            tile_size (int): Taille des tuiles
-            overlap (int): Chevauchement entre tuiles
-            
-        Returns:
-            dict: Résultats de détection
-        """
-        # Cette fonction serait implémentée en fonction du framework utilisé
-        # Elle devrait:
-        # 1. Sauvegarder l'image temporairement
-        # 2. Appeler process_region sur toute l'image
-        # 3. Retourner les résultats
-        pass
-    
-    def image_to_base64(self, img):
-        """
-        Convertit une image numpy en base64 pour affichage web.
-        
-        Args:
-            img (numpy.ndarray): Image à convertir
-            
-        Returns:
-            str: Représentation base64 de l'image
-        """
-        buf = io.BytesIO()
-        plt.imsave(buf, img, format='png')
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        return f"data:image/png;base64,{img_base64}"
-    
     def cleanup(self):
-        """Nettoie les ressources."""
+        """Clean up resources and temporary files."""
         if hasattr(self, 'src') and self.src is not None:
             self.src.close()
             self.src = None
+            
+        # Clean up temporary files in output directory
+        try:
+            import glob
+            temp_files = glob.glob(os.path.join(self.output_dir, "temp_*"))
+            for temp_file in temp_files:
+                try:
+                    os.remove(temp_file)
+                    print(f"🗑️ Cleaned up temporary file: {temp_file}")
+                except Exception as e:
+                    print(f"⚠️ Could not remove {temp_file}: {e}")
+        except Exception as e:
+            print(f"⚠️ Error during cleanup: {e}")
 
-
-# Fonctions utiles pour différents frameworks de dashboard
 
 def create_streamlit_app():
     """
-    Crée une application Streamlit pour la délimitation de champs.
-    Cette fonction est un exemple de la façon d'implémenter un dashboard
-    avec Streamlit. Pour utiliser cette fonction, installez streamlit:
-    `pip install streamlit`
+    Create a Streamlit application for field delineation.
     """
     try:
         import streamlit as st
-        from streamlit_drawable_canvas import st_canvas
+        import os  # Add os import for local use
         
-        st.set_page_config(page_title="Délimitation de Champs", layout="wide")
-        st.title("Dashboard de Délimitation de Champs Agricoles")
+        st.set_page_config(page_title="Field Delineation", layout="wide")
+        st.title("🛰️ Agricultural Field Delineation Dashboard")
         
-        # Initialisation
+        # State initialization
         if 'dashboard' not in st.session_state:
             st.session_state.dashboard = DashboardManager()
+        if 'image_loaded' not in st.session_state:
+            st.session_state.image_loaded = False
+        if 'region_selected' not in st.session_state:
+            st.session_state.region_selected = False
+        if 'processing_done' not in st.session_state:
+            st.session_state.processing_done = False
             
         dashboard = st.session_state.dashboard
         
-        # Sidebar pour les options
-        st.sidebar.header("Options")
+        # Sidebar for options
+        st.sidebar.header("📁 File Options")
         
-        # Upload de fichier
-        uploaded_file = st.sidebar.file_uploader("Charger une image satellite (GeoTIFF)", type=["tif", "tiff"])
+        # Button to reset
+        if st.sidebar.button("🔄 New Session"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
         
-        if uploaded_file:
-            # Sauvegarder le fichier temporairement
-            temp_path = f"temp_{uploaded_file.name}"
+        # File upload 
+        uploaded_file = st.sidebar.file_uploader(
+            "Load satellite image (GeoTIFF)", 
+            type=["tif", "tiff"],
+            accept_multiple_files=False,
+            help="Size limit: 500MB (configured in .streamlit/config.toml)"
+        )
+        
+        # Load image only if a new file is uploaded
+        if uploaded_file and not st.session_state.image_loaded:
+            # Save file temporarily in output directory
+            temp_path = os.path.join(dashboard.output_dir, f"temp_{uploaded_file.name}")
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getvalue())
                 
-            # Charger l'image
-            metadata = dashboard.load_image(temp_path)
-            
-            if metadata:
-                st.sidebar.success("✅ Image chargée avec succès!")
+            # Load image
+            with st.spinner("🔄 Loading image..."):
+                metadata = dashboard.load_image(temp_path)
                 
-                # Afficher l'aperçu
-                overview = dashboard.get_overview_image()
-                if overview is not None:
-                    st.image(overview, caption="Aperçu de l'image satellite", use_column_width=True)
+            if metadata:
+                st.session_state.image_loaded = True
+                st.session_state.region_selected = False
+                st.session_state.processing_done = False
+                st.sidebar.success("✅ Image loaded successfully!")
+                st.sidebar.write(f"**Dimensions:** {metadata['width']}x{metadata['height']}")
+                st.sidebar.write(f"**CRS:** {metadata['crs']}")
+            else:
+                st.sidebar.error("❌ Error loading image")
+        
+        # Display main interface only if image is loaded
+        if st.session_state.image_loaded:
+            # Display image preview (once only)
+            overview = dashboard.get_overview_image()
+            if overview is not None:
+                st.subheader("🖼️ Satellite Image Preview")
+                st.image(overview, caption="Loaded satellite image", use_container_width=True)
+                
+                # Region selection section
+                st.header("🎯 Region of Interest Selection")
+                
+                # Use sliders to select a region
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    x_start = st.slider("X Position (%)", 0, 100, 25, 1, key="x_slider")
+                    width_percent = st.slider("Width (%)", 1, 100, 50, 1, key="width_slider")
                     
-                    # Zone de sélection
-                    st.header("Sélection de la région d'intérêt")
-                    canvas_result = st_canvas(
-                        fill_color="rgba(255, 165, 0, 0.3)",
-                        stroke_width=2,
-                        stroke_color="#FF0000",
-                        background_image=dashboard.image_to_base64(overview),
-                        height=600,
-                        drawing_mode="rect",
-                        key="canvas",
-                    )
-                    
-                    # Traiter la sélection
-                    if canvas_result.json_data is not None and len(canvas_result.json_data["objects"]) > 0:
-                        rect = canvas_result.json_data["objects"][0]
-                        # Convertir les coordonnées de la canvas en coordonnées d'image
-                        scale_x = metadata['width'] / rect["canvasWidth"]
-                        scale_y = metadata['height'] / rect["canvasHeight"]
-                        x = int(rect["left"] * scale_x)
-                        y = int(rect["top"] * scale_y)
-                        width = int(rect["width"] * scale_x)
-                        height = int(rect["height"] * scale_y)
-                        
-                        # Définir la sélection
-                        dashboard.set_region_selection(x, y, width, height)
-                        
-                        # Afficher la région sélectionnée
+                with col2:
+                    y_start = st.slider("Y Position (%)", 0, 100, 25, 1, key="y_slider")
+                    height_percent = st.slider("Height (%)", 1, 100, 50, 1, key="height_slider")
+                
+                # Convert percentages to image coordinates
+                metadata = dashboard.metadata
+                x = int(metadata['width'] * x_start / 100)
+                y = int(metadata['height'] * y_start / 100)
+                width = int(metadata['width'] * width_percent / 100)
+                height = int(metadata['height'] * height_percent / 100)
+                
+                # Display calculated coordinates
+                st.info(f"📍 Selected region: X={x}, Y={y}, Width={width}, Height={height}")
+                
+                # Button to validate selection
+                if st.button("🎯 Validate Region Selection", key="validate_selection"):
+                    # Define selection in dashboard manager
+                    dashboard.set_region_selection(x, y, width, height)
+                    st.session_state.region_selected = True
+                    st.session_state.processing_done = False
+                    st.success("✅ Region selected successfully!")
+                    st.rerun()  # Force refresh
+                
+                # Display region preview only if selected
+                if st.session_state.region_selected:
+                    st.subheader("🔍 Selected Region Preview")
+                    try:
                         selected_preview = dashboard.get_selected_region_preview()
                         if selected_preview is not None:
-                            st.image(selected_preview, caption="Région sélectionnée", use_column_width=True)
+                            from PIL import Image
+                            if not isinstance(selected_preview, Image.Image):
+                                selected_preview = Image.fromarray(selected_preview)
+                            st.image(selected_preview, caption="Region to be processed", use_container_width=True)
                             
-                            # Bouton pour lancer la détection
-                            if st.button("Détecter les champs"):
-                                with st.spinner("Détection en cours..."):
-                                    result = dashboard.process_selected_region()
+                            # Button to launch detection
+                            if st.button("🚀 Detect Fields in This Region", key="detect_fields"):
+                                with st.spinner("🧠 Detection in progress... This may take several minutes."):
+                                    st.info("📍 The DelineateAnything model processes the region by tiles...")
+                                    result = dashboard.process_selected_region(output_prefix="dashboard_output")
                                     
                                     if result:
-                                        st.success("✅ Détection terminée!")
-                                        
-                                        # Afficher le résultat
-                                        from PIL import Image
-                                        overlay = np.array(Image.open(result["overlay"]))
-                                        st.image(overlay, caption="Délimitation des champs", use_column_width=True)
-                                        
-                                        # Lien pour télécharger le GeoJSON
-                                        with open(result["geojson"], "rb") as f:
-                                            geojson_bytes = f.read()
-                                            st.download_button(
-                                                label="Télécharger le GeoJSON",
-                                                data=geojson_bytes,
-                                                file_name="fields.geojson",
-                                                mime="application/json"
-                                            )
+                                        st.session_state.processing_done = True
+                                        st.session_state.result_files = result
+                                        st.success("✅ Detection completed!")
+                                        st.balloons()  # Success animation
+                                        st.rerun()  # Force refresh
+                                    else:
+                                        st.error("❌ Error during processing.")
+                        else:
+                            st.warning("⚠️ Unable to get preview of selected region.")
+                    except Exception as e:
+                        st.error(f"❌ Error displaying region: {e}")
+                
+                # Display results if available
+                if st.session_state.processing_done and 'result_files' in st.session_state:
+                    st.header("🎉 Detection Results")
+                    result = st.session_state.result_files
+                    
+                    # Display image with delineations
+                    try:
+                        from PIL import Image
+                        import os
+                        if os.path.exists(result["overlay"]):
+                            overlay = np.array(Image.open(result["overlay"]))
+                            st.image(overlay, caption="🌾 Detected field boundaries", use_container_width=True)
+                            
+                            # Button to download GeoJSON
+                            if os.path.exists(result["geojson"]):
+                                with open(result["geojson"], "rb") as f:
+                                    geojson_bytes = f.read()
+                                    st.download_button(
+                                        label="📄 Download GeoJSON File",
+                                        data=geojson_bytes,
+                                        file_name="fields_detection.geojson",
+                                        mime="application/json"
+                                    )
+                        else:
+                            st.error("❌ Result files not found")
+                    except Exception as e:
+                        st.error(f"❌ Error displaying results: {e}")
+        else:
+            st.info("👈 Please load a satellite image to get started")
+            st.markdown("""
+            ### Usage Instructions:
+            
+            1. **Load a satellite image** (.tif or .tiff file) via the sidebar
+            2. **Select a region of interest** using position and size sliders
+            3. **Validate your selection** and preview the region
+            4. **Launch field detection** with the DelineateAnything model
+            5. **Download results** in GeoJSON format
+            """)
         
-        # Nettoyage lors de la fermeture
+        # Cleanup on exit
         import atexit
         atexit.register(dashboard.cleanup)
         
     except ImportError:
-        print("Pour utiliser cette fonction, installez streamlit:")
-        print("pip install streamlit streamlit-drawable-canvas")
-        
-        
-def create_dash_app():
-    """
-    Crée une application Dash pour la délimitation de champs.
-    Cette fonction est un exemple de la façon d'implémenter un dashboard
-    avec Dash. Pour utiliser cette fonction, installez dash:
-    `pip install dash dash-leaflet`
-    """
-    # Implémentation similaire à streamlit, mais avec Dash
-    pass
+        print("To use this function, install streamlit:")
+        print("pip install streamlit")
 
 
-# Si exécuté directement, lancer l'application Streamlit
+# If executed directly, launch the Streamlit application
 if __name__ == "__main__":
     create_streamlit_app()
