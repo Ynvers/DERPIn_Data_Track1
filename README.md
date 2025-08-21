@@ -60,7 +60,7 @@ wget "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/54/T
 - **Resolution**: 10m per pixel
 - **Projection**: UTM (varies by location)
 - **Data Type**: 8-bit unsigned integer
-- **Size**: ~50-100 MB per image
+- **Size**: ~50-500 MB per image
 
 #### Processing these images
 Once downloaded, these TCI files can be processed with the Delineate-Anything model to detect agricultural field boundaries.
