@@ -10,3 +10,4 @@ tqdm>=4.50.0
 pillow>=8.0.0
 streamlit>=1.0.0
 streamlit-drawable-canvas>=0.9.0
+streamlit-cropper>=0.1.0
